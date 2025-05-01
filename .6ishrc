@@ -1,0 +1,40 @@
+# .aishellrc - Configuration file for aishell
+# This file is automatically loaded when aishell starts
+
+# Your preferred prompt style - options: minimal, info, fancy
+AISHELL_PROMPT_STYLE="fancy"
+
+# Environment variables for the shell
+export EDITOR="vim"
+export AISHELL_VERSION="1.0.0"
+
+# You can add your own environment variables here
+# export MY_CUSTOM_VAR="value"
+
+# Custom aliases
+alias ll="ls -la"
+alias cls="clear"
+alias back="cd .."
+
+# Helper function to run a command through n regardless of trigger word
+n-run() {
+    echo -e "\033[1;33mRunning through AI: $*\033[0m"
+    n "$*"
+}
+
+# Helper function to show AI shell help
+aishell-help() {
+    echo -e "\033[1;33m=== AI Shell Help ===\033[0m"
+    echo -e "\033[1;33mCommands containing '$TRIGGER_WORD' are automatically processed by AI\033[0m"
+    echo -e "\033[1;33mSpecial commands:\033[0m"
+    echo -e "  \033[1;32mn-run \"command\"\033[0m - Run any command through AI"
+    echo -e "  \033[1;32m!history\033[0m - Show command history"
+    echo -e "  \033[1;32m!n\033[0m - Run history command number n"
+    echo -e "  \033[1;32mexit\033[0m or \033[1;32mquit\033[0m - Exit the shell"
+    echo -e "  \033[1;32maishell-help\033[0m - Show this help message"
+}
+
+# Optional: Add your own paths to PATH if needed
+# export PATH="$PATH:/your/custom/path"
+
+echo -e "\033[90mLoaded .aishellrc configuration\033[0m" 

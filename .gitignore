@@ -1,0 +1,37 @@
+# Python virtualenv
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Nix
+result
+result-*
+.direnv/
+
+# Environment files
+.env
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python distribution
+dist/
+build/
+*.egg-info/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Nix build artifacts (if any) 
+technical_log.txt

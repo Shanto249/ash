@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+# nixos-ash - Simplified version of ash for NixOS
+# Avoids using read -e which can cause hanging in NixOS
+# Routes unknown commands to AI automatically
+
+# Configuration
+DEFAULT_TRIGGER_WORD="avarice"
+TRIGGER_WORD="${ASH_TRIGGER_WORD:-$DEFAULT_TRIGGER_WORD}"
+N_COMMAND="n"
+VERSION="1.0.5" # Incremented version
+AI_MODE="auto"  # Can be "auto", "trigger", or "all"
+VERBOSE=false   # Whether to show detailed processing messages
+PROMPT_TEXT="ash"  # Text to show in prompt
+
+# Colors
+COLOR_PROMPT="\033[1;36m"  # Cyan
+COLOR_INFO="\033[1;33m"    # Yellow
+COLOR_SUCCESS="\033[1;32m" # Green
+COLOR_ERROR="\033[1;31m"   # Red
+COLOR_AI="\033[1;35m"      # Magenta for AI
+COLOR_RESET="\033[0m"
+
+# Check for command-line arguments
+for arg in "$@"; do
+    case $arg in
+        --trigger=*)
+            TRIGGER_WORD="${arg#*=}"
+            ;;
+        --mode=*)
+            AI_MODE="${arg#*=}"
+            ;;
+        --verbose)
+            VERBOSE=true
+            ;;
+        --prompt=*)
+            PROMPT_TEXT="${arg#*=}"
+            ;;
+        --help)
+            echo "Usage: nixos-ash [OPTIONS]"
+            echo "  --trigger=WORD   Set the trigger word (default: $DEFAULT_TRIGGER_WORD)"
+            echo "  --mode=MODE      Set AI processing mode (auto, trigger, all)"
+            echo "                   auto    - Process unknown commands through AI"
+            echo "                   trigger - Only process commands with trigger word"
+            echo "                   all     - Process all commands through AI"
+            echo "  --verbose        Show detailed processing messages"
+            echo "  --prompt=TEXT    Set the prompt text (default: ash)"
+            echo "  --help           Show this help message"
+            echo "  --version        Show version information"
+            exit 0
+            ;;
+        --version)
+            echo "NixOS AI Shell v$VERSION"
+            exit 0
+            ;;
+    esac
+done
+
+# Check if n command exists, provide fallback if not
+if ! command -v "$N_COMMAND" &> /dev/null; then
+    echo -e "${COLOR_INFO}Warning: '$N_COMMAND' command not found. Using echo fallback.${COLOR_RESET}"
+    # Updated fallback to include the "Executing:" prefix for testing
+    N_COMMAND="echo Executing: echo \"[AI would process]: \$*\""
+fi
+
+# Welcome message
+echo -e "${COLOR_INFO}===========================================${COLOR_RESET}"
+echo -e "${COLOR_INFO}  NixOS AI Shell v$VERSION${COLOR_RESET}"
+if [[ "$AI_MODE" == "auto" ]]; then
+    echo -e "${COLOR_INFO}  Unknown commands will be processed through AI${COLOR_RESET}"
+    echo -e "${COLOR_INFO}  Commands with '${TRIGGER_WORD}' will always use AI${COLOR_RESET}"
+elif [[ "$AI_MODE" == "trigger" ]]; then
+    echo -e "${COLOR_INFO}  Commands containing '${TRIGGER_WORD}' will be${COLOR_RESET}"
+    echo -e "${COLOR_INFO}  processed through the AI.${COLOR_RESET}"
+elif [[ "$AI_MODE" == "all" ]]; then
+    echo -e "${COLOR_INFO}  All commands will be processed through AI${COLOR_RESET}"
+fi
+echo -e "${COLOR_INFO}===========================================${COLOR_RESET}"
+echo -e "${COLOR_INFO}  Type 'help' for commands${COLOR_RESET}"
+echo -e "${COLOR_INFO}  Type 'exit' to quit${COLOR_RESET}"
+echo -e "${COLOR_INFO}===========================================${COLOR_RESET}"
+echo
+
+# Function to check if a command exists
+command_exists() {
+    type "$1" &> /dev/null
+    return $?
+}
+
+# Show prompt
+show_prompt() {
+    echo -ne "${COLOR_PROMPT}${1}${COLOR_RESET}$ "
+}
+
+# Process AI command with the desired format and execution
+process_ai_command() {
+    local input="$1"
+
+    if [[ "$VERBOSE" == true ]]; then
+        echo -e "${COLOR_INFO}Processing through AI: ${input}${COLOR_RESET}"
+    fi
+
+    # Run the AI command with timeout and capture output
+    local ai_output
+    ai_output=$(timeout 30s $N_COMMAND "$input" 2>&1) || {
+        echo -e "${COLOR_ERROR}AI command timed out or failed${COLOR_RESET}"
+        return 1
+    }
+
+    # Check if output contains "Executing:"
+    if [[ "$ai_output" == *"Executing:"* ]]; then
+        # Extract the command being executed
+        local exec_cmd=$(echo "$ai_output" | grep -m 1 "Executing:" | sed 's/Executing: //')
+        
+        # Display AI prompt and the command to execute
+        echo -ne "${COLOR_AI}${TRIGGER_WORD}${COLOR_RESET}$ "
+        echo "$exec_cmd"
+        
+        # Execute the command
+        eval "$exec_cmd"
+        local status=$?
+        if [[ $status -ne 0 ]]; then
+             echo -e "${COLOR_ERROR}AI generated command failed with status $status${COLOR_RESET}"
+        fi
+    else
+        # Just show the raw AI output if it doesn't contain "Executing:"
+         echo -ne "${COLOR_AI}${TRIGGER_WORD}${COLOR_RESET}$ "
+        echo " $ai_output"
+    fi
+}
+
+# Process command function - auto-routes to AI for unknown commands
+process_command() {
+    local input="$1"
+    
+    # Skip empty commands
+    if [ -z "$input" ]; then
+        return 0
+    fi
+    
+    # Handle special commands
+    case "$input" in
+        exit|quit)
+            echo -e "${COLOR_INFO}Exiting AI shell${COLOR_RESET}"
+            exit 0
+            ;;
+        help)
+            echo -e "${COLOR_INFO}Commands:${COLOR_RESET}"
+            echo -e "  ${COLOR_SUCCESS}exit${COLOR_RESET} or ${COLOR_SUCCESS}quit${COLOR_RESET} - Exit the shell"
+            echo -e "  ${COLOR_SUCCESS}help${COLOR_RESET} - Show this help message"
+            echo -e "  ${COLOR_SUCCESS}version${COLOR_RESET} - Show version information"
+            echo -e "  ${COLOR_SUCCESS}get-trigger${COLOR_RESET} - Show current trigger word"
+            echo -e "  ${COLOR_SUCCESS}set-mode MODE${COLOR_RESET} - Change AI processing mode"
+            echo -e "            (auto, trigger, all)"
+            echo -e "  ${COLOR_SUCCESS}set-prompt TEXT${COLOR_RESET} - Change the prompt text"
+            echo -e "  ${COLOR_SUCCESS}verbose${COLOR_RESET} - Toggle verbose mode"
+            echo
+            if [[ "$AI_MODE" == "auto" ]]; then
+                echo -e "${COLOR_INFO}Current mode: auto - Unknown commands go to AI${COLOR_RESET}"
+            elif [[ "$AI_MODE" == "trigger" ]]; then
+                echo -e "${COLOR_INFO}Current mode: trigger - Commands with '$TRIGGER_WORD' go to AI${COLOR_RESET}"
+            elif [[ "$AI_MODE" == "all" ]]; then
+                echo -e "${COLOR_INFO}Current mode: all - All commands go to AI${COLOR_RESET}"
+            fi
+            echo -e "${COLOR_INFO}Verbose mode: $VERBOSE${COLOR_RESET}"
+            echo -e "${COLOR_INFO}Prompt: $PROMPT_TEXT${COLOR_RESET}"
+            return 0
+            ;;
+        version)
+            echo -e "${COLOR_INFO}NixOS AI Shell v$VERSION${COLOR_RESET}"
+            return 0
+            ;;
+        get-trigger)
+            echo -e "${COLOR_INFO}Current trigger word: ${TRIGGER_WORD}${COLOR_RESET}"
+            return 0
+            ;;
+        set-mode*)
+            local new_mode=$(echo "$input" | awk '{print $2}')
+            if [[ "$new_mode" == "auto" || "$new_mode" == "trigger" || "$new_mode" == "all" ]]; then
+                AI_MODE="$new_mode"
+                echo -e "${COLOR_SUCCESS}AI mode set to: $AI_MODE${COLOR_RESET}"
+            else
+                echo -e "${COLOR_ERROR}Invalid mode. Use: auto, trigger, or all${COLOR_RESET}"
+            fi
+            return 0
+            ;;
+        set-prompt*)
+            PROMPT_TEXT=$(echo "$input" | cut -d' ' -f2-)
+            echo -e "${COLOR_SUCCESS}Prompt set to: $PROMPT_TEXT${COLOR_RESET}"
+            return 0
+            ;;
+        verbose)
+            VERBOSE=$([ "$VERBOSE" == true ] && echo false || echo true)
+            echo -e "${COLOR_INFO}Verbose mode: $VERBOSE${COLOR_RESET}"
+            return 0
+            ;;
+        cd*)
+            # Special handling for cd commands to keep directory updated
+            eval "$input"
+            return $?
+            ;;
+    esac
+    
+    # Determine if AI should be used
+    local use_ai=false
+    if [[ "$AI_MODE" == "all" ]]; then
+        use_ai=true
+    elif [[ "$AI_MODE" == "trigger" && "$input" == *"$TRIGGER_WORD"* ]]; then
+        use_ai=true
+    elif [[ "$AI_MODE" == "auto" ]]; then
+        if [[ "$input" == *"$TRIGGER_WORD"* ]]; then
+            use_ai=true
+        else
+            local cmd=$(echo "$input" | awk '{print $1}')
+            if ! command_exists "$cmd"; then
+                use_ai=true
+            fi
+        fi
+    fi
+
+    if [[ "$use_ai" == true ]]; then
+        process_ai_command "$input"
+    else
+        # Execute the command normally
+        eval "$input"
+        local status=$?
+        if [[ $status -ne 0 ]]; then
+            if [[ $status -eq 127 && "$AI_MODE" == "auto" ]]; then
+                # Command not found, route to AI as a fallback
+                if [[ "$VERBOSE" == true ]]; then
+                    echo -e "${COLOR_INFO}Command failed with 'not found', routing to AI...${COLOR_RESET}"
+                fi
+                process_ai_command "$input"
+            else
+                # Print error for other non-zero statuses
+                echo -e "${COLOR_ERROR}Command failed with status $status${COLOR_RESET}"
+            fi
+        fi
+    fi
+}
+
+# Main loop - using basic read command (no -e) to avoid hanging
+show_prompt "$PROMPT_TEXT"
+while IFS= read -r cmd; do
+    # Don't echo the command here, process_command handles output
+    process_command "$cmd"
+    # Show prompt for next command
+    show_prompt "$PROMPT_TEXT"
+done 

@@ -1,0 +1,118 @@
+# .ashrc - Configuration file for the AI Shell (ash)
+# This file is automatically loaded when ash starts
+
+# AI Shell Configuration
+export ASH_VERSION="1.0.0"
+# The trigger word can be overridden with the ASH_TRIGGER_WORD environment variable
+# or by using the --trigger=WORD option when starting ash
+export ASH_TRIGGER_WORD="${ASH_TRIGGER_WORD:-avarice}"
+
+# Environment variables
+export EDITOR="vim"
+export VISUAL="vim"
+export PAGER="less"
+export LANG="en_US.UTF-8"
+
+# Useful aliases
+alias ls="ls --color=auto"
+alias ll="ls -la"
+alias la="ls -A"
+alias l="ls -CF"
+alias cls="clear"
+alias back="cd .."
+alias ..="cd .."
+alias ...="cd ../.."
+alias grep="grep --color=auto"
+alias please="sudo"
+
+# Helper function to run any command through the AI
+n-run() {
+    if [ -z "$1" ]; then
+        echo -e "\033[1;31mUsage: n-run \"your command\"\033[0m"
+        return 1
+    fi
+    echo -e "\033[1;33mRunning through AI: $*\033[0m"
+    $N_COMMAND "$*"
+}
+
+# History search function
+hist-search() {
+    if [ -z "$1" ]; then
+        echo -e "\033[1;31mUsage: hist-search \"search term\"\033[0m"
+        return 1
+    fi
+    grep -i "$1" "$HISTORY_FILE" | grep -v "^$" | nl
+}
+
+# Git shortcuts
+git-save() {
+    local msg="$*"
+    if [ -z "$msg" ]; then
+        msg="Update $(date +%Y-%m-%d)"
+    fi
+    git add . && git commit -m "$msg"
+}
+
+# Extract function - handles various archive types
+extract() {
+    if [ -z "$1" ]; then
+        echo -e "\033[1;31mUsage: extract <file>\033[0m"
+        return 1
+    fi
+    if [ -f "$1" ]; then
+        case "$1" in
+            *.tar.bz2)   tar xjf "$1"     ;;
+            *.tar.gz)    tar xzf "$1"     ;;
+            *.bz2)       bunzip2 "$1"     ;;
+            *.rar)       unrar e "$1"     ;;
+            *.gz)        gunzip "$1"      ;;
+            *.tar)       tar xf "$1"      ;;
+            *.tbz2)      tar xjf "$1"     ;;
+            *.tgz)       tar xzf "$1"     ;;
+            *.zip)       unzip "$1"       ;;
+            *.Z)         uncompress "$1"  ;;
+            *.7z)        7z x "$1"        ;;
+            *)           echo "'$1' cannot be extracted via extract" ;;
+        esac
+    else
+        echo "'$1' is not a valid file"
+    fi
+}
+
+# Fancy directory size function
+dirsize() {
+    du -sh "${1:-.}" | sort -h
+}
+
+# Helper function to simplify running commands with the trigger word
+av() {
+    if [ -z "$1" ]; then
+        echo -e "\033[1;31mUsage: av \"your request\"\033[0m"
+        return 1
+    fi
+    local cmd="$ASH_TRIGGER_WORD $*"
+    echo -e "\033[1;33mRunning: $cmd\033[0m"
+    eval "$cmd"
+}
+
+# Get current trigger word
+get-trigger() {
+    echo -e "\033[1;33mCurrent trigger word: $ASH_TRIGGER_WORD\033[0m"
+}
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Load nix environment if applicable
+if command_exists nix-shell; then
+    nix-shell-run() {
+        nix-shell -p "$1" --run "${@:2}"
+    }
+fi
+
+# Optional: Additional PATH configurations
+# export PATH="$PATH:$HOME/.local/bin"
+
+echo -e "\033[90mLoaded ASH configuration from .ashrc\033[0m" 
